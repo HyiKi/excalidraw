@@ -1,7 +1,5 @@
 "use client";
-import * as excalidrawLib from "@excalidraw/excalidraw";
 import { Excalidraw } from "@excalidraw/excalidraw";
-import App from "../../components/App";
 
 import "@excalidraw/excalidraw/index.css";
 
