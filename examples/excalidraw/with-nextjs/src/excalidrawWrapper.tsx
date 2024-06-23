@@ -8,13 +8,7 @@ import "@excalidraw/excalidraw/index.css";
 const ExcalidrawWrapper: React.FC = () => {
   return (
     <div style={{ width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <App
-        appTitle={"Excalidraw with Nextjs Example"}
-        useCustom={(api: any, args?: any[]) => {}}
-        excalidrawLib={excalidrawLib}
-      >
-        <Excalidraw />
-      </App>
+      <Excalidraw />
     </div>
   );
 };
