@@ -13,7 +13,7 @@ export const isInvisiblySmallElement = (
   element: ExcalidrawElement,
 ): boolean => {
   if (isLinearElement(element) || isFreeDrawElement(element)) {
-    return element.points ? element.points.length < 2 : false;
+    return element.points ? element.points.length < 2 : true;
   }
   return element.width === 0 && element.height === 0;
 };
