@@ -1,4 +1,9 @@
-import { updateBoundElements } from "../../element/binding";
+import type { Radians } from "../../../math";
+import { point, pointRotateRads } from "../../../math";
+import {
+  bindOrUnbindLinearElements,
+  updateBoundElements,
+} from "../../element/binding";
 import { mutateElement } from "../../element/mutateElement";
 import {
   measureFontSizeFromWidth,
@@ -11,14 +16,34 @@ import {
   getBoundTextMaxWidth,
   handleBindTextResize,
 } from "../../element/textElement";
-import { isFrameLikeElement, isTextElement } from "../../element/typeChecks";
+import {
+  isFrameLikeElement,
+  isLinearElement,
+  isTextElement,
+} from "../../element/typeChecks";
 import type {
   ElementsMap,
   ExcalidrawElement,
   NonDeletedExcalidrawElement,
+  NonDeletedSceneElementsMap,
 } from "../../element/types";
-import { rotate } from "../../math";
+import {
+  getSelectedGroupIds,
+  getElementsInGroup,
+  isInGroup,
+} from "../../groups";
+import type Scene from "../../scene/Scene";
+import type { AppState } from "../../types";
 import { getFontString } from "../../utils";
+
+export type StatsInputProperty =
+  | "x"
+  | "y"
+  | "width"
+  | "height"
+  | "angle"
+  | "fontSize"
+  | "gridStep";
 
 export const SMALLEST_DELTA = 0.01;
 
@@ -100,12 +125,16 @@ export const resizeElement = (
   nextWidth: number,
   nextHeight: number,
   keepAspectRatio: boolean,
-  latestElement: ExcalidrawElement,
   origElement: ExcalidrawElement,
-  elementsMap: ElementsMap,
-  originalElementsMap: Map<string, ExcalidrawElement>,
+  elementsMap: NonDeletedSceneElementsMap,
+  elements: readonly NonDeletedExcalidrawElement[],
+  scene: Scene,
   shouldInformMutation = true,
 ) => {
+  const latestElement = elementsMap.get(origElement.id);
+  if (!latestElement) {
+    return;
+  }
   let boundTextFont: { fontSize?: number } = {};
   const boundTextElement = getBoundTextElement(latestElement, elementsMap);
 
@@ -121,6 +150,8 @@ export const resizeElement = (
     nextWidth = Math.max(nextWidth, minWidth);
     nextHeight = Math.max(nextHeight, minHeight);
   }
+
+  const { width: oldWidth, height: oldHeight } = latestElement;
 
   mutateElement(
     latestElement,
@@ -140,6 +171,12 @@ export const resizeElement = (
     },
     shouldInformMutation,
   );
+  updateBindings(latestElement, elementsMap, elements, scene, {
+    newSize: {
+      width: nextWidth,
+      height: nextHeight,
+    },
+  });
 
   if (boundTextElement) {
     boundTextFont = {
@@ -164,10 +201,7 @@ export const resizeElement = (
   }
 
   updateBoundElements(latestElement, elementsMap, {
-    newSize: {
-      width: nextWidth,
-      height: nextHeight,
-    },
+    oldSize: { width: oldWidth, height: oldHeight },
   });
 
   if (boundTextElement && boundTextFont) {
@@ -181,33 +215,34 @@ export const resizeElement = (
 export const moveElement = (
   newTopLeftX: number,
   newTopLeftY: number,
-  latestElement: ExcalidrawElement,
   originalElement: ExcalidrawElement,
-  elementsMap: ElementsMap,
+  elementsMap: NonDeletedSceneElementsMap,
+  elements: readonly NonDeletedExcalidrawElement[],
+  scene: Scene,
   originalElementsMap: ElementsMap,
   shouldInformMutation = true,
 ) => {
+  const latestElement = elementsMap.get(originalElement.id);
+  if (!latestElement) {
+    return;
+  }
   const [cx, cy] = [
     originalElement.x + originalElement.width / 2,
     originalElement.y + originalElement.height / 2,
   ];
-  const [topLeftX, topLeftY] = rotate(
-    originalElement.x,
-    originalElement.y,
-    cx,
-    cy,
+  const [topLeftX, topLeftY] = pointRotateRads(
+    point(originalElement.x, originalElement.y),
+    point(cx, cy),
     originalElement.angle,
   );
 
   const changeInX = newTopLeftX - topLeftX;
   const changeInY = newTopLeftY - topLeftY;
 
-  const [x, y] = rotate(
-    newTopLeftX,
-    newTopLeftY,
-    cx + changeInX,
-    cy + changeInY,
-    -originalElement.angle,
+  const [x, y] = pointRotateRads(
+    point(newTopLeftX, newTopLeftY),
+    point(cx + changeInX, cy + changeInY),
+    -originalElement.angle as Radians,
   );
 
   mutateElement(
@@ -218,6 +253,7 @@ export const moveElement = (
     },
     shouldInformMutation,
   );
+  updateBindings(latestElement, elementsMap, elements, scene);
 
   const boundTextElement = getBoundTextElement(
     originalElement,
@@ -234,5 +270,50 @@ export const moveElement = (
         },
         shouldInformMutation,
       );
+  }
+};
+
+export const getAtomicUnits = (
+  targetElements: readonly ExcalidrawElement[],
+  appState: AppState,
+) => {
+  const selectedGroupIds = getSelectedGroupIds(appState);
+  const _atomicUnits = selectedGroupIds.map((gid) => {
+    return getElementsInGroup(targetElements, gid).reduce((acc, el) => {
+      acc[el.id] = true;
+      return acc;
+    }, {} as AtomicUnit);
+  });
+  targetElements
+    .filter((el) => !isInGroup(el))
+    .forEach((el) => {
+      _atomicUnits.push({
+        [el.id]: true,
+      });
+    });
+  return _atomicUnits;
+};
+
+export const updateBindings = (
+  latestElement: ExcalidrawElement,
+  elementsMap: NonDeletedSceneElementsMap,
+  elements: readonly NonDeletedExcalidrawElement[],
+  scene: Scene,
+  options?: {
+    simultaneouslyUpdated?: readonly ExcalidrawElement[];
+    newSize?: { width: number; height: number };
+  },
+) => {
+  if (isLinearElement(latestElement)) {
+    bindOrUnbindLinearElements(
+      [latestElement],
+      elementsMap,
+      elements,
+      scene,
+      true,
+      [],
+    );
+  } else {
+    updateBoundElements(latestElement, elementsMap, options);
   }
 };
