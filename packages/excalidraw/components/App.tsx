@@ -2220,7 +2220,7 @@ class App extends React.Component<AppProps, AppState> {
     if ("launchQueue" in window && "LaunchParams" in window) {
       (window as any).launchQueue.setConsumer(
         async (launchParams: { files: any[] }) => {
-          if (!launchParams.files.length) {
+          if (!launchParams.files || !launchParams.files.length) {
             return;
           }
           const fileHandle = launchParams.files[0];
